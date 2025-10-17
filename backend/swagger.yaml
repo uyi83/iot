@@ -1,0 +1,288 @@
+openapi: 3.0.0
+info:
+  title: IOT Project API
+  version: 1.0.0
+  description: API quản lý cảm biến và thiết bị (ESP32)
+
+servers:
+  - url: http://localhost:3000/api
+
+tags:
+  - name: Sensors
+    description: API liên quan đến cảm biến
+  - name: Actions
+    description: API liên quan đến điều khiển thiết bị và trạng thái
+
+paths:
+  /sensors:
+    get:
+      summary: Lấy tất cả dữ liệu cảm biến
+      tags:
+        - Sensors
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    temperature:
+                      type: number
+                    humidity:
+                      type: number
+                    light:
+                      type: number
+                    created_at:
+                      type: string
+                      format: date-time
+
+    get:
+      summary: Lấy dữ liệu cảm biến phân trang, search và sort
+      tags:
+        - Sensors
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: searchField
+          schema:
+            type: string
+            default: all
+        - in: query
+          name: sortField
+          schema:
+            type: string
+            default: created_at
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            default: desc
+      responses:
+        '200':
+          description: Dữ liệu phân trang
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        temperature:
+                          type: number
+                        humidity:
+                          type: number
+                        light:
+                          type: number
+                        created_at:
+                          type: string
+                          format: date-time
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+
+  /sensors/range:
+    get:
+      summary: Lấy dữ liệu cảm biến theo khoảng thời gian
+      tags:
+        - Sensors
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            format: date-time
+          required: true
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            format: date-time
+          required: true
+      responses:
+        '200':
+          description: Dữ liệu theo khoảng thời gian
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    temperature:
+                      type: number
+                    humidity:
+                      type: number
+                    light:
+                      type: number
+                    created_at:
+                      type: string
+                      format: date-time
+
+  /sensors/latest:
+    get:
+      summary: Lấy dữ liệu cảm biến mới nhất
+      tags:
+        - Sensors
+      responses:
+        '200':
+          description: Dữ liệu mới nhất
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  temperature:
+                    type: number
+                  humidity:
+                    type: number
+                  light:
+                    type: number
+                  created_at:
+                    type: string
+                    format: date-time
+
+  /actions:
+    post:
+      summary: Điều khiển thiết bị
+      tags:
+        - Actions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device:
+                  type: string
+                  example: "LED1"
+                action:
+                  type: string
+                  example: "ON"
+      responses:
+        '200':
+          description: Thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+
+  /actions/history:
+    get:
+      summary: Lấy lịch sử hành động
+      tags:
+        - Actions
+      parameters:
+        - in: query
+          name: device
+          schema:
+            type: string
+        - in: query
+          name: action
+          schema:
+            type: string
+        - in: query
+          name: time
+          schema:
+            type: string
+        - in: query
+          name: sortField
+          schema:
+            type: string
+            default: created_at
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            default: desc
+      responses:
+        '200':
+          description: Lịch sử hành động
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    device:
+                      type: string
+                    action:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+
+  /actions/states:
+    get:
+      summary: Lấy trạng thái tất cả thiết bị
+      tags:
+        - Actions
+      responses:
+        '200':
+          description: Trạng thái thiết bị
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    device:
+                      type: string
+                    state:
+                      type: string
+
+  /actions/esp32-status:
+    get:
+      summary: Lấy trạng thái ESP32
+      tags:
+        - Actions
+      responses:
+        '200':
+          description: Trạng thái ESP32
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  uptime:
+                    type: string

@@ -11,8 +11,9 @@ const Profile = () => {
     avatar:
       "https://raw.githubusercontent.com/uyi83/images/main/z6949886921719_246037b0b59adf82e6429da65731a7a7.jpg", // thay bằng ảnh thật của bạn
     github: "https://github.com/uyi83/iot", // 🔗 Thay link GitHub thật
-    reportPdf: "https://example.com/baocao.pdf", // 🔗 Link file PDF
-    postman: "https://www.postman.com/ducnv/workspace/api-demo", // 🔗 Link Postman workspace
+    reportPdf:
+      "https://github.com/uyi83/images/blob/main/B%C3%A1o%20c%C3%A1o.pdf", // 🔗 Link file PDF
+    postman: "http://localhost:3000/api-docs/", // 🔗 Link Postman workspace
   };
 
   return (
