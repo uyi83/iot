@@ -73,15 +73,28 @@ const Dashboard = () => {
   };
 
   const handleDeviceToggle = async (device) => {
-    const newState = devices[device] === "ON" ? "OFF" : "ON";
     try {
-      const response = await sensorApi.controlDevice(device, newState);
-      setDevices({ ...devices, [device]: newState });
+      // Gửi lệnh đến backend
+      const response = await sensorApi.controlDevice(
+        device,
+        devices[device] === "ON" ? "OFF" : "ON"
+      );
 
-      // ⚠️ Hiển thị cảnh báo nếu ESP32 offline
       if (response.esp32Status === "OFFLINE") {
         alert(`⚠️ ${response.warning}\n\n${response.message}`);
+        return; // Không cập nhật toggle
       }
+
+      // Chờ trạng thái mới từ ESP32
+      const checkStatus = setInterval(async () => {
+        const states = await sensorApi.getDeviceStates(); // backend trả trạng thái thực tế
+        const newState = states.find((s) => s.device_name === device)?.state;
+
+        if (newState && newState !== devices[device]) {
+          setDevices({ ...devices, [device]: newState });
+          clearInterval(checkStatus); // dừng interval khi nhận trạng thái
+        }
+      }, 500); // kiểm tra mỗi 0.5s
     } catch (error) {
       console.error("Error controlling device:", error);
       alert("❌ Lỗi khi gửi lệnh");

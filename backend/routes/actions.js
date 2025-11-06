@@ -4,44 +4,67 @@ import mqttClient, { getEsp32Status } from "../config/mqttClient.js";
 
 const router = express.Router();
 
-// 🟢 API bật/tắt đèn
+// 🔌 Bật/tắt thiết bị
 router.post("/", (req, res) => {
   const { device, action } = req.body;
-
   if (!device || !action)
     return res.status(400).json({ error: "Thiếu device hoặc action" });
 
-  // 🔍 Kiểm tra ESP32 có online không
   const esp32Status = getEsp32Status();
-
   const message = `${device}_${action}`;
+
   mqttClient.publish("controlLED", message);
   console.log("📤 Gửi lệnh MQTT:", message);
 
-  // Lưu lịch sử hành động
-  const historySql =
-    "INSERT INTO action_history (device, action) VALUES (?, ?)";
-  db.query(historySql, [device, action]);
+  // Lưu lịch sử
+  db.query("INSERT INTO action_history (device, action) VALUES (?, ?)", [
+    device,
+    action,
+  ]);
 
-  // Cập nhật trạng thái hiện tại
-  const updateSql = "UPDATE device_state SET state = ? WHERE device_name = ?";
-  db.query(updateSql, [action, device]);
+  // Cập nhật trạng thái tạm
+  db.query("UPDATE device_state SET state = ? WHERE device_name = ?", [
+    action,
+    device,
+  ]);
 
-  // ⚠️ Trả về thông báo nếu ESP32 offline
+  // ESP32 offline
   if (!esp32Status.isOnline) {
     return res.json({
-      success: true,
-      message: `Lệnh ${device} ${action} đã gửi (⚠️ ESP32 OFFLINE - Chờ kết nối lại)`,
+      success: false,
+      state: action, // trạng thái vẫn gửi nhưng FE sẽ không cập nhật
       esp32Status: "OFFLINE",
       warning:
         "ESP32 không kết nối - lệnh sẽ được thực thi khi thiết bị online",
+      message: `Lệnh ${device} ${action} đã gửi (⚠️ ESP32 OFFLINE)`,
     });
   }
 
+  // Online, FE sẽ poll trạng thái
   res.json({
     success: true,
-    message: `Đã gửi lệnh ${device} ${action}`,
     esp32Status: "ONLINE",
+    message: `Lệnh ${device} ${action} đã gửi`,
+  });
+});
+
+// 📋 Lấy trạng thái devices
+router.get("/states", (req, res) => {
+  const sql = "SELECT device_name, state FROM device_state";
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+    res.json(results);
+  });
+});
+
+// 🔌 ESP32 status
+router.get("/esp32-status", (req, res) => {
+  const esp32Status = getEsp32Status();
+  res.json({
+    isOnline: esp32Status.isOnline,
+    lastSeen: esp32Status.lastSeen,
+    disconnectTime: esp32Status.disconnectTime,
+    statusText: esp32Status.isOnline ? "🟢 ONLINE" : "🔴 OFFLINE",
   });
 });
 
@@ -88,29 +111,4 @@ router.get("/history", (req, res) => {
     res.json(results);
   });
 });
-
-// 🎯 Lấy trạng thái thiết bị hiện tại
-router.get("/states", (req, res) => {
-  const sql = "SELECT device_name, state FROM device_state";
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error("❌ Lỗi truy vấn:", err);
-      res.status(500).json({ error: "Database error" });
-    } else {
-      res.json(results);
-    }
-  });
-});
-
-// 🔌 Lấy trạng thái kết nối ESP32
-router.get("/esp32-status", (req, res) => {
-  const esp32Status = getEsp32Status();
-  res.json({
-    isOnline: esp32Status.isOnline,
-    lastSeen: esp32Status.lastSeen,
-    disconnectTime: esp32Status.disconnectTime,
-    statusText: esp32Status.isOnline ? "🟢 ONLINE" : "🔴 OFFLINE",
-  });
-});
-
 export default router;
