@@ -111,4 +111,28 @@ router.get("/history", (req, res) => {
     res.json(results);
   });
 });
+
+// api thôngs kê
+router.get("/device-actions-stats", (req, res) => {
+  const sql = `
+SELECT
+  device,
+  SUM(CASE WHEN action = 'ON' THEN 1 ELSE 0 END) AS turn_on_count,
+  SUM(CASE WHEN action = 'OFF' THEN 1 ELSE 0 END) AS turn_off_count
+  FROM
+  action_history
+  GROUP BY
+  device
+  ORDER BY
+  turn_on_count DESC;
+`;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error("❌ Lỗi truy vấn thống kê hành động:", err);
+      return res.status(500).json({ error: "Database error" });
+    }
+    res.json(results);
+  });
+});
 export default router;

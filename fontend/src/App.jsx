@@ -5,24 +5,36 @@ import Dashboard from "./pages/Dashboard";
 import DataSensor from "./pages/DataSensor";
 import ActionHistory from "./pages/ActionHistory";
 import Profile from "./pages/Profile";
+import StatsPage from "./pages/StatsPage"; // 🆕 Import trang thống kê
 
 function App() {
   return (
     <Router>
+           {" "}
       <div className="flex flex-col h-screen">
-        <Header />
+                <Header />       {" "}
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
+                    <Sidebar />         {" "}
           <main className="flex-1 overflow-y-auto">
+                       {" "}
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+                            <Route path="/" element={<Dashboard />} />
+                           {" "}
               <Route path="/data-sensor" element={<DataSensor />} />
+                           {" "}
               <Route path="/action-history" element={<ActionHistory />} />
-              <Route path="/profile" element={<Profile />} />
+              <Route path="/stats" element={<StatsPage />} />{" "}
+              {/* 🆕 Định tuyến cho trang thống kê */}
+                            <Route path="/profile" element={<Profile />} />     
+                   {" "}
             </Routes>
+                     {" "}
           </main>
+                 {" "}
         </div>
+             {" "}
       </div>
+         {" "}
     </Router>
   );
 }

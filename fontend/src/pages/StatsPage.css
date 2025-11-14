@@ -1,0 +1,143 @@
+.stats-page {
+  padding: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+  font-family: "Inter", sans-serif;
+}
+
+h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e3a8a;
+  border-bottom: 3px solid #3b82f6;
+  padding-bottom: 10px;
+}
+
+.stats-section {
+  margin-top: 35px;
+  padding: 20px;
+  border: 1px solid #e0e7ff;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+}
+
+h2 {
+  margin-bottom: 15px;
+  font-size: 1.4rem;
+  color: #2563eb;
+}
+
+/* Ngưỡng */
+.limit-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  background: #f0f7ff;
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  border: 1px solid #bfdbfe;
+}
+
+.limit-inputs h3 {
+  width: 100%;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e40af;
+}
+
+.limit-inputs div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.limit-inputs input {
+  padding: 7px;
+  width: 90px;
+  border-radius: 6px;
+  border: 1px solid #93c5fd;
+}
+
+.limit-inputs button {
+  padding: 8px 16px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.limit-inputs button:hover {
+  background: #059669;
+}
+
+/* Row ngang */
+.stat-row {
+  display: flex;
+  gap: 18px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.stat-row::-webkit-scrollbar {
+  height: 6px;
+}
+.stat-row::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Card */
+.stat-card {
+  min-width: 200px;
+  padding: 18px;
+  background: #f8fafc;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+/* Title */
+.stat-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2563eb;
+  margin-bottom: 8px;
+}
+
+/* Main value */
+.stat-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #dc2626;
+}
+
+.stat-sub {
+  color: #475569;
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+
+/* Bật / Tắt dạng đôi */
+.stat-value.dual {
+  display: flex;
+  justify-content: space-around;
+}
+
+.stat-value.dual span {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.on-count strong {
+  color: #16a34a;
+}
+
+.off-count strong {
+  color: #dc2626;
+}

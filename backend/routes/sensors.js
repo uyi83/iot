@@ -127,5 +127,58 @@ router.get("/range", (req, res) => {
     res.json(results);
   });
 });
+router.get("/sensor-exceed-stats", (req, res) => {
+  const { temp_limit, humidity_limit, light_limit } = req.query; // Ép kiểu dữ liệu từ chuỗi (query params) sang số
 
+  const tempLimitNum = Number(temp_limit);
+  const humidityLimitNum = Number(humidity_limit);
+  const lightLimitNum = Number(light_limit); // Kiểm tra tính hợp lệ
+
+  if (isNaN(tempLimitNum) || isNaN(humidityLimitNum) || isNaN(lightLimitNum)) {
+    return res
+      .status(400)
+      .json({ error: "Ngưỡng giới hạn phải là số hợp lệ." });
+  } // 🆕 Câu truy vấn SQL mới để tính toán số lần vượt ngưỡng
+
+  const sql = `
+    SELECT
+    SUM(CASE WHEN temperature > ? THEN 1 ELSE 0 END) AS temp_exceed_count,
+    SUM(CASE WHEN humidity > ? THEN 1 ELSE 0 END) AS humidity_exceed_count,
+    SUM(CASE WHEN light > ? THEN 1 ELSE 0 END) AS light_exceed_count
+    FROM
+    sensor_data;
+    `; // Truyền các biến đã ép kiểu vào db.query
+
+  db.query(
+    sql,
+    [tempLimitNum, humidityLimitNum, lightLimitNum],
+    (err, results) => {
+      if (err) {
+        console.error("❌ Lỗi truy vấn thống kê vượt ngưỡng:", err);
+        return res.status(500).json({ error: "Database error" });
+      } // Logic xử lý dữ liệu và sắp xếp đã có sẵn
+
+      const result = results[0];
+      const data = [
+        {
+          sensor: "Nhiệt độ",
+          limit: temp_limit,
+          exceed_count: result.temp_exceed_count,
+        },
+        {
+          sensor: "Độ ẩm",
+          limit: humidity_limit,
+          exceed_count: result.humidity_exceed_count,
+        },
+        {
+          sensor: "Ánh sáng",
+          limit: light_limit,
+          exceed_count: result.light_exceed_count,
+        },
+      ].sort((a, b) => b.exceed_count - a.exceed_count);
+
+      res.json(data);
+    }
+  );
+});
 export default router;

@@ -45,6 +45,15 @@ const sensorApi = {
 
   // Trạng thái ESP32
   getEsp32Status: () => axiosClient.get("/actions/esp32-status"),
+
+  // Thống kê số lần cảm biến vượt ngưỡng
+  getSensorExceedStats: (temp_limit, humidity_limit, light_limit) =>
+    axiosClient.get("/sensors/sensor-exceed-stats", {
+      params: { temp_limit, humidity_limit, light_limit },
+    }),
+
+  // Thống kê số lượt bật/tắt thiết bị
+  getDeviceActionStats: () => axiosClient.get("/actions/device-actions-stats"),
 };
 
 export default sensorApi;
