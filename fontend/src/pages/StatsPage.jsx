@@ -3,8 +3,8 @@ import sensorApi from "../api/sensorApi";
 import "./StatsPage.css";
 
 const StatsPage = () => {
-  const [exceedStats, setExceedStats] = useState([]);
-  const [actionStats, setActionStats] = useState([]);
+  const [exceedStats, setExceedStats] = useState([]); // thống kê vượt ngưỡng
+  const [actionStats, setActionStats] = useState([]); // thống kê bật / tắt thiết bị
   const [loadingExceed, setLoadingExceed] = useState(false);
   const [loadingAction, setLoadingAction] = useState(false);
 

@@ -1,24 +1,29 @@
-
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <DHT.h>
+#include <ArduinoJson.h> 
 
-#define WIFI_SSID     "Scwud"
-#define WIFI_PASSWORD "14015353"
-#define MQTT_SERVER   "192.168.144.94"   
-#define MQTT_PORT     1884
-#define MQTT_USER     "scwud"
-#define MQTT_PASSWORD "Abc@1234"
-// Topic
-#define TOPIC_SENSOR  "dataSensor"
-#define TOPIC_CONTROL "controlLED"   
+#define WIFI_SSID       "Scwud"
+#define WIFI_PASSWORD   "14015353"
+#define MQTT_SERVER     "192.168.180.94"  
+#define MQTT_PORT       1884
+#define MQTT_USER       "scwud"
+#define MQTT_PASSWORD   "Abc@1234"
 
+// topic này
+#define TOPIC_SENSOR    "dataSensor"
+#define TOPIC_CONTROL   "controlLED"    
+#define TOPIC_FEEDBACK  "device/feedback" 
+
+// --- GIỮ NGUYÊN TÊN BIẾN CŨ ---
 #define DHTPIN 25
 #define DHTTYPE DHT11
-#define FAN_PIN 18
-#define AIR_CONDITIONER_PIN 19
+#define FAN_PIN 19
+#define AIR_CONDITIONER_PIN 18 
 #define LED_PIN 21
-#define LIGHT_SENSOR_PIN 36
+#define LIGHT_SENSOR_PIN 36    
+
+#define JSON_BUF_SIZE 256 
 
 DHT dht(DHTPIN, DHTTYPE);
 WiFiClient espClient;
@@ -29,7 +34,7 @@ unsigned long lastAliveSignal = 0;
 bool firstConnection = true;
 
 // =====================
-// Kết nối WiFi
+// Kết nối WiFi (GIỮ NGUYÊN)
 // =====================
 void setup_wifi() {
   Serial.print("Đang kết nối WiFi: ");
@@ -52,29 +57,69 @@ void setup_wifi() {
 }
 
 // =====================
-// Callback xử lý khi có message MQTT
+// Callback xử lý message
 // =====================
-
 void callback(char* topic, byte* message, unsigned int length) {
+  
   String msg;
   for (int i = 0; i < length; i++) msg += (char)message[i];
-  Serial.print("📩 Nhận lệnh trên topic [");
+  
+  Serial.print("📩 Nhận tin nhắn [");
   Serial.print(topic);
   Serial.print("]: ");
   Serial.println(msg);
 
-  // Kiểm tra tên thiết bị
-  if (msg.startsWith("FAN_")) {
-    digitalWrite(FAN_PIN, msg.endsWith("ON") ? HIGH : LOW);
-    Serial.println(msg.endsWith("ON") ? "🌀 FAN BẬT" : "🌀 FAN TẮT");
+  // 1. Nếu nhận lại lệnh text "GET_STATE" do chính mình gửi -> Bỏ qua
+  if (msg == "GET_STATE") {
+    return; 
   }
-  else if (msg.startsWith("AIR_CONDITIONER_")) {
-    digitalWrite(AIR_CONDITIONER_PIN, msg.endsWith("ON") ? HIGH : LOW);
-    Serial.println(msg.endsWith("ON") ? "❄️ AC BẬT" : "❄️ AC TẮT");
-  }
-  else if (msg.startsWith("LED_")) {
-    digitalWrite(LED_PIN, msg.endsWith("ON") ? HIGH : LOW);
-    Serial.println(msg.endsWith("ON") ? "💡 LED BẬT" : "💡 LED TẮT");
+
+  // 2. phân tích JSON
+  StaticJsonDocument<JSON_BUF_SIZE> doc;
+  DeserializationError error = deserializeJson(doc, msg);
+
+  if (!error) {
+      // --- LÀ JSON HỢP LỆ ---
+      const char* device = doc["device"];
+      const char* action = doc["action"];
+      const char* source = doc["source"];
+
+      if (!device || !action || !source) {
+        Serial.println("⚠️ JSON thiếu device, action hoặc source.");
+        return;
+      }
+      
+      String s_device = String(device);
+      String s_action = String(action);
+      String s_source = String(source);
+
+      // THỰC THI LỆNH (Dùng tên biến cũ)
+      if (s_device == "FAN") {
+        digitalWrite(FAN_PIN, s_action == "ON" ? HIGH : LOW);
+        Serial.print(s_action == "ON" ? "🌀 FAN BẬT" : "🌀 FAN TẮT");
+      }
+      else if (s_device == "AIR_CONDITIONER") {
+        digitalWrite(AIR_CONDITIONER_PIN, s_action == "ON" ? HIGH : LOW);
+        Serial.print(s_action == "ON" ? "❄️ AC BẬT" : "❄️ AC TẮT");
+      }
+      else if (s_device == "LED") {
+        digitalWrite(LED_PIN, s_action == "ON" ? HIGH : LOW);
+        Serial.print(s_action == "ON" ? "💡 LED BẬT" : "💡 LED TẮT");
+      }
+      
+      // GỬI FEEDBACK (Chỉ khi source là USER)
+      if (s_source == "USER") { 
+        String feedback = "{\"device\":\"" + s_device + "\",\"state\":\"" + s_action + "\"}";
+        client.publish(TOPIC_FEEDBACK, feedback.c_str());
+        Serial.println("\n✅ Gửi xác nhận (Lệnh USER)");
+      } else if (s_source == "SYNC") {
+        Serial.println("\n🔄 Lệnh đồng bộ (SYNC) - Không gửi Feedback.");
+      }
+
+  } else {
+      // --- KHÔNG PHẢI JSON ---
+      Serial.print("⚠️ Bỏ qua tin nhắn (Không phải JSON): ");
+      Serial.println(msg);
   }
 }
 
@@ -86,14 +131,16 @@ void reconnect() {
     Serial.print("🔄 Kết nối MQTT...");
     if (client.connect("ESP32Client", MQTT_USER, MQTT_PASSWORD)) {
       Serial.println("✅ Thành công");
-      client.subscribe(TOPIC_CONTROL);
       
-      // 📢 GỬI TÍN HIỆU ONLINE LẦN ĐẦU KẾT NỐI
+      // --- THAY ĐỔI: Chỉ subscribe 1 topic ---
+      client.subscribe(TOPIC_CONTROL); 
+      
+      // GỬI TÍN HIỆU ONLINE
       Serial.println("📢 Gửi tín hiệu ONLINE đến server...");
       client.publish(TOPIC_SENSOR, "{\"status\":\"ONLINE\"}");
       delay(500);
       
-      // Yêu cầu trạng thái hiện tại
+      // YÊU CẦU TRẠNG THÁI (Gửi vào chính topic vừa sub)
       client.publish(TOPIC_CONTROL, "GET_STATE");
       Serial.println("🔄 Yêu cầu trạng thái thiết bị từ server");
       
@@ -108,7 +155,7 @@ void reconnect() {
 }
 
 // =====================
-// Setup
+// Setup (GIỮ NGUYÊN)
 // =====================
 void setup() {
   Serial.begin(115200);
@@ -134,7 +181,7 @@ void setup() {
 }
 
 // =====================
-// Loop
+// Loop (GIỮ NGUYÊN)
 // =====================
 void loop() {
   // Kiểm tra WiFi
@@ -150,6 +197,7 @@ void loop() {
   }
   client.loop();
   unsigned long now = millis();
+  
   // 📊 Gửi dữ liệu cảm biến mỗi 2 giây
   if (now - lastRead >= 2000) {
     lastRead = now;
@@ -164,14 +212,15 @@ void loop() {
     }
     char payload[200];
     snprintf(payload, sizeof(payload),
-             "{\"temp\":%.1f,\"humidity\":%.1f,\"light\":%d,\"status\":\"ALIVE\"}", 
-             t, h, lightValue);
+              "{\"temp\":%.1f,\"humidity\":%.1f,\"light\":%d,\"status\":\"ALIVE\"}", 
+              t, h, lightValue);
     client.publish(TOPIC_SENSOR, payload);
     Serial.print("📤 [Sensor] ");
     Serial.println(payload);
     
     lastAliveSignal = now;
   }
+  
   // 💓 Gửi heartbeat mỗi 5 giây (để server biết ESP32 vẫn online)
   if (now - lastAliveSignal >= 5000 && !firstConnection) {
     client.publish(TOPIC_SENSOR, "{\"status\":\"ALIVE\"}");

@@ -2,9 +2,11 @@ import axiosClient from "./axiosClient";
 
 const sensorApi = {
   // Lấy tất cả dữ liệu cảm biến
-  getAll: () => axiosClient.get("/sensors"),
+  getAll: (params = {}) => {
+    return axiosClient.get("/sensors", { params });
+  },
 
-  // 🔹 Lấy dữ liệu cảm biến có phân trang + search + sort
+  //  Lấy dữ liệu cảm biến có phân trang + search + sort
   getPaginated: (
     page = 1,
     limit = 10,
@@ -17,9 +19,15 @@ const sensorApi = {
       params: { page, limit, search, searchField, sortField, sortOrder },
     }),
 
-  // Lấy dữ liệu cảm biến theo khoảng thời gian
-  getByTimeRange: (startDate, endDate) =>
-    axiosClient.get("/sensors/range", { params: { startDate, endDate } }),
+  getRecent: (limit = 20) =>
+    axiosClient.get("/sensors", {
+      params: {
+        page: 1,
+        limit: parseInt(limit, 10),
+        sortField: "created_at",
+        sortOrder: "desc",
+      },
+    }),
 
   // Lấy dữ liệu mới nhất
   getLatest: () => axiosClient.get("/sensors/latest"),
@@ -34,10 +42,12 @@ const sensorApi = {
     action = "",
     time = "",
     sortField = "created_at",
-    sortOrder = "desc"
+    sortOrder = "desc",
+    page = 1,
+    limit = 10
   ) =>
     axiosClient.get("/actions/history", {
-      params: { device, action, time, sortField, sortOrder },
+      params: { device, action, time, sortField, sortOrder, page, limit },
     }),
 
   // Lấy trạng thái thiết bị

@@ -3,23 +3,25 @@ import sensorApi from "../api/sensorApi";
 import ChartSensor from "../components/ChartSensor";
 
 const Dashboard = () => {
-  const [latestData, setLatestData] = useState(null);
-  const [chartData, setChartData] = useState([]);
+  const [latestData, setLatestData] = useState(null); // Dữ liệu mới nhất
+  const [chartData, setChartData] = useState([]); // 20 dữ liệu cho biểu đồ
+  const [processingDevice, setProcessingDevice] = useState(null);
   const [devices, setDevices] = useState({
+    // trạng thái thiết bị ban đầu
     FAN: "OFF",
     LED: "OFF",
     AIR_CONDITIONER: "OFF",
   });
   const [loading, setLoading] = useState(true);
   const [esp32Status, setEsp32Status] = useState("UNKNOWN");
-  const [isEsp32Online, setIsEsp32Online] = useState(false);
+  const [isEsp32Online, setIsEsp32Online] = useState(false); // trạng thái ESP32
 
   useEffect(() => {
-    fetchData();
-    fetchDeviceStates();
+    fetchData(); // lấy dữ liệu cảm biến mới nhất
+    fetchDeviceStates(); // lấy trạng thái hiện tại
     checkEsp32Status();
 
-    const interval = setInterval(fetchData, 2000);
+    const interval = setInterval(fetchData, 2000); //Cập nhật dữ liệu mỗi 2s
     const esp32Interval = setInterval(checkEsp32Status, 3000);
 
     return () => {
@@ -30,18 +32,26 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      const response = await sensorApi.getAll();
-      const data = Array.isArray(response) ? response : response.data || [];
+      // gọi đồng thời
+      const [latest, recentRes] = await Promise.all([
+        sensorApi.getLatest(),
+        sensorApi.getRecent(20),
+      ]);
 
-      console.log("📊 Đã lấy dữ liệu từ DB:", data.length, "records");
+      setLatestData(latest || null);
 
-      if (data && data.length > 0) {
-        setLatestData(data[0]);
-        setChartData(data.slice(0, 20));
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error("❌ Error fetching data:", error);
+      // recent: backend có thể trả { data: [...] } hoặc trực tiếp [...]
+      const recentPayload = recentRes?.data;
+      const recentRows = Array.isArray(recentPayload)
+        ? recentPayload
+        : Array.isArray(recentPayload?.data)
+        ? recentPayload.data
+        : [];
+
+      setChartData(recentRows.slice(0, 20));
+    } catch (err) {
+      console.error("❌ Error fetching sensor data:", err);
+    } finally {
       setLoading(false);
     }
   };
@@ -73,7 +83,9 @@ const Dashboard = () => {
   };
 
   const handleDeviceToggle = async (device) => {
+    if (processingDevice === device) return;
     try {
+      setProcessingDevice(device);
       // Gửi lệnh đến backend
       const response = await sensorApi.controlDevice(
         device,
@@ -84,7 +96,6 @@ const Dashboard = () => {
         alert(`⚠️ ${response.warning}\n\n${response.message}`);
         return; // Không cập nhật toggle
       }
-
       // Chờ trạng thái mới từ ESP32
       const checkStatus = setInterval(async () => {
         const states = await sensorApi.getDeviceStates(); // backend trả trạng thái thực tế
@@ -93,11 +104,13 @@ const Dashboard = () => {
         if (newState && newState !== devices[device]) {
           setDevices({ ...devices, [device]: newState });
           clearInterval(checkStatus); // dừng interval khi nhận trạng thái
+          setProcessingDevice(null);
         }
       }, 500); // kiểm tra mỗi 0.5s
     } catch (error) {
       console.error("Error controlling device:", error);
       alert("❌ Lỗi khi gửi lệnh");
+      setProcessingDevice(null);
     }
   };
 

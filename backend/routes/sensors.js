@@ -3,105 +3,92 @@ import db from "../config/db.js";
 
 const router = express.Router();
 
-router.get("/", (req, res) => {
+// Helper query promise
+const query = (sql, params = []) =>
+  new Promise((resolve, reject) => {
+    db.query(sql, params, (err, result) => {
+      if (err) reject(err);
+      else resolve(result);
+    });
+  });
+
+router.get("/", async (req, res) => {
   console.log("🔍 API /api/sensors được gọi");
 
-  const {
-    page = 1,
-    limit = 10,
-    sortField = "created_at",
-    sortOrder = "desc",
-    search = "",
-    searchField = "all",
-  } = req.query;
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      sortField = "created_at",
+      sortOrder = "desc",
+      search = "",
+      searchField = "all",
+    } = req.query;
 
-  const allowedSortFields = [
-    "temperature",
-    "humidity",
-    "light",
-    "created_at",
-    "id",
-  ];
-  const field = allowedSortFields.includes(sortField)
-    ? sortField
-    : "created_at";
-  const order = sortOrder.toLowerCase() === "asc" ? "ASC" : "DESC";
+    const limitNum = Number(limit); // chuyển sang kiểm Number
+    const offset = (page - 1) * limitNum; // vị trí bắt đầu
 
-  let whereClause = "";
-  const searchTerm = `%${search}%`;
+    // Validate sort field
+    const allowedSortFields = [
+      "temperature",
+      "humidity",
+      "light",
+      "created_at",
+      "id",
+    ];
+    const field = allowedSortFields.includes(sortField)
+      ? sortField
+      : "created_at";
+    const order = sortOrder.toLowerCase() === "asc" ? "ASC" : "DESC";
 
-  if (search && search.trim() !== "") {
-    switch (searchField) {
-      case "temperature":
-        whereClause = "WHERE temperature LIKE ?";
-        break;
-      case "humidity":
-        whereClause = "WHERE humidity LIKE ?";
-        break;
-      case "light":
-        whereClause = "WHERE light LIKE ?";
-        break;
-      case "time":
-        whereClause = "WHERE created_at LIKE ?";
-        break;
-      default:
-        whereClause =
-          "WHERE id LIKE ? OR temperature LIKE ? OR humidity LIKE ? OR light LIKE ? OR created_at LIKE ?";
-        break;
-    }
-  }
+    // 🔎 Build WHERE
+    let whereSQL = "";
+    let whereParams = [];
 
-  const countSql =
-    whereClause === ""
-      ? "SELECT COUNT(*) as total FROM sensor_data"
-      : `SELECT COUNT(*) as total FROM sensor_data ${whereClause}`;
+    if (search.trim() !== "") {
+      const s = `%${search}%`;
 
-  const dataSqlBase = `SELECT * FROM sensor_data ${
-    whereClause || ""
-  } ORDER BY ${field} ${order}`;
-  const offset = (page - 1) * limit;
-  const dataSql = `${dataSqlBase} LIMIT ? OFFSET ?`;
-
-  const searchParams =
-    whereClause === ""
-      ? []
-      : searchField === "all"
-      ? [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm]
-      : [searchTerm];
-
-  db.query(countSql, searchParams, (countErr, countResult) => {
-    if (countErr) {
-      console.error("❌ Lỗi đếm records:", countErr);
-      return res.status(500).json({ error: countErr.message });
-    }
-
-    const total = countResult[0]?.total || 0;
-
-    db.query(
-      dataSql,
-      [...searchParams, parseInt(limit), parseInt(offset)],
-      (dataErr, dataResult) => {
-        if (dataErr) {
-          console.error("❌ Lỗi truy vấn DB:", dataErr);
-          return res.status(500).json({ error: dataErr.message });
-        }
-
-        console.log(
-          `✅ Trả về ${dataResult.length} records (page=${page}, total=${total}, search="${search}", sort=${field} ${order})`
-        );
-
-        res.json({
-          data: dataResult,
-          total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: Math.ceil(total / limit),
-          sortField: field,
-          sortOrder: order,
-        });
+      if (searchField === "all") {
+        whereSQL = `WHERE id LIKE ? OR temperature LIKE ? OR humidity LIKE ? OR light LIKE ? OR created_at LIKE ?`;
+        whereParams = [s, s, s, s, s];
+      } else {
+        // Tìm theo một cột cụ thể khác
+        whereSQL = `WHERE ${searchField} LIKE ?`;
+        whereParams = [s];
       }
-    );
-  });
+    }
+
+    // Count total
+    const countSql = `SELECT COUNT(*) as total FROM sensor_data ${whereSQL}`; // đếm tổng bản ghi
+    const totalResult = await query(countSql, whereParams);
+    const total = totalResult[0].total; // lấy giá trị tổng các bản ghi
+
+    // Get data
+    const dataSql = `
+      SELECT * 
+      FROM sensor_data 
+      ${whereSQL}
+      ORDER BY ${field} ${order}
+      LIMIT ? OFFSET ?
+    `;
+
+    const data = await query(dataSql, [...whereParams, limitNum, offset]);
+
+    console.log(`✅ Trả về ${data.length} records`);
+
+    res.json({
+      data,
+      total,
+      page: Number(page),
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+      sortField: field,
+      sortOrder: order,
+    });
+  } catch (err) {
+    console.error("❌ Lỗi API:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get("/latest", (req, res) => {
@@ -115,20 +102,8 @@ router.get("/latest", (req, res) => {
   });
 });
 
-router.get("/range", (req, res) => {
-  const { startDate, endDate } = req.query;
-  const sql =
-    "SELECT * FROM sensor_data WHERE created_at BETWEEN ? AND ? ORDER BY created_at DESC";
-  db.query(sql, [startDate, endDate], (err, results) => {
-    if (err) {
-      console.error("❌ Lỗi truy vấn:", err);
-      return res.status(500).json({ error: "Database error" });
-    }
-    res.json(results);
-  });
-});
 router.get("/sensor-exceed-stats", (req, res) => {
-  const { temp_limit, humidity_limit, light_limit } = req.query; // Ép kiểu dữ liệu từ chuỗi (query params) sang số
+  const { temp_limit, humidity_limit, light_limit } = req.query;
 
   const tempLimitNum = Number(temp_limit);
   const humidityLimitNum = Number(humidity_limit);

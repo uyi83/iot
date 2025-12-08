@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import "./config/mqttClient.js";
+import mqttClient from "./config/mqttClient.js";
 import actionRoutes from "./routes/actions.js";
 import sensorRoutes from "./routes/sensors.js";
 import db from "./config/db.js";

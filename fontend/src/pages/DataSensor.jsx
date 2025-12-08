@@ -15,15 +15,13 @@ const DataSensor = () => {
   // 🔹 Lấy dữ liệu từ server (đã bao gồm search + sort)
   const fetchData = async (currentPage = page) => {
     try {
-      setLoading(true);
-
       const res = await sensorApi.getPaginated(
-        currentPage,
-        limit,
-        searchTerm.trim(),
-        searchField,
-        sortField,
-        sortOrder
+        currentPage, // vi tri trang muon lay
+        limit, // so ban ghi moi trang
+        searchTerm.trim(), // tu khoa tim kiem
+        searchField, // truong tim kiem
+        sortField, // truong sap xep
+        sortOrder // thu tu xep
       );
 
       if (res.data && Array.isArray(res.data)) {
@@ -36,7 +34,6 @@ const DataSensor = () => {
         setData([]);
         setTotalRecords(0);
       }
-
       setLoading(false);
     } catch (error) {
       console.error("❌ Lỗi khi tải dữ liệu:", error);
@@ -55,6 +52,34 @@ const DataSensor = () => {
     }
     setPage(1);
   };
+
+  // Gọi API khi thay đổi sort, page
+  useEffect(() => {
+    fetchData(page);
+  }, [page, sortField, sortOrder]);
+
+  //  Gọi API khi search thay đổi
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchData(1);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, searchField]);
+  // cập nhật dữ liệu định kỳ
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (searchTerm.trim() === "") fetchData(page);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [searchTerm, page, sortField, sortOrder]);
+
+  // tao thanh phan trang
+  const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
+  const pageOptions = Array.from(
+    { length: totalPages },
+    (_, i) => i + 1
+  ).filter((p) => p === 1 || p % 5 === 0 || p === totalPages);
 
   const renderSortIcon = (field) => {
     if (sortField !== field)
@@ -104,35 +129,6 @@ const DataSensor = () => {
       </svg>
     );
   };
-
-  // 🔄 Gọi API khi thay đổi sort, page
-  useEffect(() => {
-    fetchData(page);
-  }, [page, sortField, sortOrder]);
-
-  // 🔍 Gọi API khi search thay đổi (debounce 0.5s)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setPage(1);
-      fetchData(1);
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [searchTerm, searchField]);
-
-  // ⏱ Cập nhật tự động mỗi 2s
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (searchTerm.trim() === "") fetchData(page);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [searchTerm, page, sortField, sortOrder]);
-
-  const totalPages = totalRecords > 0 ? Math.ceil(totalRecords / limit) : 1;
-  const pageOptions = Array.from(
-    { length: totalPages },
-    (_, i) => i + 1
-  ).filter((p) => p === 1 || p % 5 === 0 || p === totalPages);
-
   return (
     <div className="p-4 bg-gray-50 min-h-screen">
       {/* 🔍 Tìm kiếm */}
@@ -163,7 +159,7 @@ const DataSensor = () => {
             <option value="temperature">Nhiệt độ</option>
             <option value="humidity">Độ ẩm</option>
             <option value="light">Ánh sáng</option>
-            <option value="time">Thời gian</option>
+            <option value="created_at">Thời gian</option>
           </select>
         </div>
 

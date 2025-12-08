@@ -11,44 +11,39 @@ router.post("/", (req, res) => {
     return res.status(400).json({ error: "Thiếu device hoặc action" });
 
   const esp32Status = getEsp32Status();
-  const message = `${device}_${action}`;
 
-  mqttClient.publish("controlLED", message);
-  console.log("📤 Gửi lệnh MQTT:", message);
+  // Gửi lệnh dưới dạng JSON với source là USER
+  const payload = JSON.stringify({
+    device: device,
+    action: action,
+    source: "USER",
+  });
 
-  // Lưu lịch sử
-  db.query("INSERT INTO action_history (device, action) VALUES (?, ?)", [
-    device,
-    action,
-  ]);
-
-  // Cập nhật trạng thái tạm
-  db.query("UPDATE device_state SET state = ? WHERE device_name = ?", [
-    action,
-    device,
-  ]);
+  // Gửi lệnh lên topic controlLED
+  mqttClient.publish("controlLED", payload);
+  console.log("📤 Gửi lệnh USER MQTT:", payload);
 
   // ESP32 offline
   if (!esp32Status.isOnline) {
     return res.json({
       success: false,
-      state: action, // trạng thái vẫn gửi nhưng FE sẽ không cập nhật
+      state: action,
       esp32Status: "OFFLINE",
       warning:
-        "ESP32 không kết nối - lệnh sẽ được thực thi khi thiết bị online",
+        "ESP32 không kết nối - lệnh đã gửi, nhưng trạng thái DB sẽ không được cập nhật cho đến khi thiết bị online và xác nhận.",
       message: `Lệnh ${device} ${action} đã gửi (⚠️ ESP32 OFFLINE)`,
     });
   }
 
-  // Online, FE sẽ poll trạng thái
+  // Online, FE sẽ poll trạng thái và chờ DB được cập nhật bởi feedback loop
   res.json({
     success: true,
     esp32Status: "ONLINE",
-    message: `Lệnh ${device} ${action} đã gửi`,
+    message: `Lệnh ${device} ${action} đã gửi, chờ xác nhận từ ESP32...`,
   });
 });
 
-// 📋 Lấy trạng thái devices
+// 📋 Lấy trạng thái devices (GIỮ NGUYÊN)
 router.get("/states", (req, res) => {
   const sql = "SELECT device_name, state FROM device_state";
   db.query(sql, (err, results) => {
@@ -57,74 +52,85 @@ router.get("/states", (req, res) => {
   });
 });
 
-// 🔌 ESP32 status
-router.get("/esp32-status", (req, res) => {
-  const esp32Status = getEsp32Status();
-  res.json({
-    isOnline: esp32Status.isOnline,
-    lastSeen: esp32Status.lastSeen,
-    disconnectTime: esp32Status.disconnectTime,
-    statusText: esp32Status.isOnline ? "🟢 ONLINE" : "🔴 OFFLINE",
-  });
-});
-
-// 📋 Lấy lịch sử hành động (hỗ trợ lọc & sort)
+// 📋 Lấy lịch sử hành động (hỗ trợ lọc & sort) (GIỮ NGUYÊN)
 router.get("/history", (req, res) => {
-  const {
+  let {
     device = "",
     action = "",
     time = "",
     sortField = "created_at",
     sortOrder = "desc",
+    page = 1,
+    limit = 10,
   } = req.query;
+
+  page = parseInt(page);
+  limit = parseInt(limit);
+  const offset = (page - 1) * limit;
 
   const allowedFields = ["id", "device", "action", "created_at"];
   const field = allowedFields.includes(sortField) ? sortField : "created_at";
   const order = sortOrder.toLowerCase() === "asc" ? "ASC" : "DESC";
 
-  // Xây dựng câu truy vấn động
-  let sql = `SELECT * FROM action_history WHERE 1=1`;
+  let where = "WHERE 1=1";
   const params = [];
 
   if (device) {
-    sql += " AND device = ?";
+    where += " AND device = ?";
     params.push(device);
   }
-
   if (action) {
-    sql += " AND action = ?";
+    where += " AND action = ?";
     params.push(action);
   }
-
   if (time) {
-    sql += " AND created_at LIKE ?";
+    where += " AND created_at LIKE ?";
     params.push(`%${time}%`);
   }
 
-  sql += ` ORDER BY ${field} ${order}`;
+  // Query đếm tổng
+  const countSql = `SELECT COUNT(*) AS total FROM action_history ${where}`;
 
-  db.query(sql, params, (err, results) => {
-    if (err) {
-      console.error("❌ Lỗi truy vấn:", err);
-      return res.status(500).json({ error: "Database error" });
-    }
-    res.json(results);
+  // Query dữ liệu trang hiện tại
+  const dataSql = `
+    SELECT * FROM action_history 
+    ${where}
+    ORDER BY ${field} ${order}
+    LIMIT ? OFFSET ?
+  `;
+
+  db.query(countSql, params, (err, countResult) => {
+    if (err) return res.status(500).json({ error: "Database error" });
+
+    const total = countResult[0].total;
+
+    db.query(dataSql, [...params, limit, offset], (err, results) => {
+      if (err) return res.status(500).json({ error: "Database error" });
+
+      res.json({
+        total,
+        page,
+        limit,
+        data: results,
+      });
+    });
   });
 });
 
-// api thôngs kê
+// api thống kê (GIỮ NGUYÊN)
 router.get("/device-actions-stats", (req, res) => {
   const sql = `
 SELECT
   device,
   SUM(CASE WHEN action = 'ON' THEN 1 ELSE 0 END) AS turn_on_count,
-  SUM(CASE WHEN action = 'OFF' THEN 1 ELSE 0 END) AS turn_off_count
+  SUM(CASE WHEN action = 'OFF' THEN 1 ELSE 0 END) AS turn_off_count,
+  COUNT(*) AS total_actions
   FROM
   action_history
   GROUP BY
   device
   ORDER BY
-  turn_on_count DESC;
+  total_actions DESC;
 `;
 
   db.query(sql, (err, results) => {
@@ -133,6 +139,17 @@ SELECT
       return res.status(500).json({ error: "Database error" });
     }
     res.json(results);
+  });
+});
+
+// 🔌 ESP32 status (GIỮ NGUYÊN)
+router.get("/esp32-status", (req, res) => {
+  const esp32Status = getEsp32Status();
+  res.json({
+    isOnline: esp32Status.isOnline,
+    lastSeen: esp32Status.lastSeen,
+    disconnectTime: esp32Status.disconnectTime,
+    statusText: esp32Status.isOnline ? "🟢 ONLINE" : "🔴 OFFLINE",
   });
 });
 export default router;

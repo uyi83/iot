@@ -1,92 +1,73 @@
 import { useState, useEffect } from "react";
 import sensorApi from "../api/sensorApi";
 
-const ChevronUp = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M5 15l7-7 7 7"
-    />
-  </svg>
-);
-
-const ChevronDown = ({ className }) => (
-  <svg
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M19 9l-7 7-7-7"
-    />
-  </svg>
-);
-
 const ActionHistory = () => {
-  const [data, setData] = useState([]);
-  const [allDevices, setAllDevices] = useState([]); // Lưu tất cả devices từ DB
-  const [filterAction, setFilterAction] = useState("");
-  const [filterDevice, setFilterDevice] = useState("");
-  const [filterTime, setFilterTime] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState("created_at");
+  const [data, setData] = useState([]); // mảng action history của trang hiện tại
+  const [allDevices, setAllDevices] = useState([]); // danh sách tất cả devices
+  const [filterAction, setFilterAction] = useState(""); // lọc theo action
+  const [filterDevice, setFilterDevice] = useState(""); // lọc theo device
+  const [filterTime, setFilterTime] = useState(""); // lọc theo thời gian
+  const [currentPage, setCurrentPage] = useState(1); // trang hiện tại
+  const [sortField, setSortField] = useState("created_at"); // sắp xếp theo cột
   const [sortOrder, setSortOrder] = useState("desc");
+  const [total, setTotal] = useState(0); // tổng số bản ghi
   const itemsPerPage = 10;
 
-  // 🧩 Hàm lấy dữ liệu
+  // 🧩 Hàm lấy dữ liệu phân trang từ backend
   const fetchData = async () => {
     try {
-      const result = await sensorApi.getActionHistory(
+      const response = await sensorApi.getActionHistory(
         filterDevice,
         filterAction,
         filterTime,
         sortField,
-        sortOrder
+        sortOrder,
+        currentPage,
+        itemsPerPage
       );
-      setData(result);
+
+      setData(response.data);
+      setTotal(response.total);
     } catch (error) {
       console.error("❌ Lỗi lấy action history:", error);
     }
   };
 
-  // 🧩 Hàm lấy danh sách tất cả devices từ DB (chỉ gọi 1 lần)
+  // Lấy danh sách tất cả devices để lọc
   const fetchAllDevices = async () => {
     try {
-      const result = await sensorApi.getActionHistory(
-        "", // Không lọc device
-        "", // Không lọc action
-        "", // Không lọc time
+      const response = await sensorApi.getActionHistory(
+        "",
+        "",
+        "",
         "created_at",
-        "desc"
+        "desc",
+        1,
+        1000 // lấy đủ để liệt kê tất cả devices
       );
-      const devices = [...new Set(result.map((d) => d.device))];
+      const devices = [...new Set(response.data.map((d) => d.device))];
       setAllDevices(devices);
     } catch (error) {
       console.error("❌ Lỗi lấy danh sách devices:", error);
     }
   };
 
-  // 🔄 Gọi fetchAllDevices khi component mount
+  // 🔄 Gọi fetchAllDevices khi mount
   useEffect(() => {
     fetchAllDevices();
   }, []);
 
-  // 🔄 Gọi fetchData khi filter hoặc sort thay đổi
+  // 🔄 Gọi fetchData khi filter, sort hoặc currentPage thay đổi
   useEffect(() => {
     fetchData();
-    setCurrentPage(1);
-  }, [filterDevice, filterAction, filterTime, sortField, sortOrder]);
+  }, [
+    filterDevice,
+    filterAction,
+    filterTime,
+    sortField,
+    sortOrder,
+    currentPage,
+  ]);
 
   // 🔁 Hàm sort
   const handleSort = (field) => {
@@ -96,6 +77,7 @@ const ActionHistory = () => {
       setSortField(field);
       setSortOrder("desc");
     }
+    setCurrentPage(1); // reset về trang 1 khi đổi sort
   };
 
   const SortIcon = ({ field }) => {
@@ -107,9 +89,40 @@ const ActionHistory = () => {
     );
   };
 
-  const totalPages = Math.ceil(data.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const pageData = data.slice(startIndex, startIndex + itemsPerPage);
+  const totalPages = Math.ceil(total / itemsPerPage);
+
+  const ChevronUp = ({ className }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M5 15l7-7 7 7"
+      />
+    </svg>
+  );
+
+  const ChevronDown = ({ className }) => (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 9l-7 7-7-7"
+      />
+    </svg>
+  );
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen flex flex-col">
@@ -188,7 +201,7 @@ const ActionHistory = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {pageData.map((item) => (
+                  {data.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-3 py-2 text-gray-900 font-medium">
                         {item.id}
@@ -219,8 +232,7 @@ const ActionHistory = () => {
               <div className="px-4 py-1 border-t flex items-center justify-between bg-gray-50 text-xs">
                 <div className="text-gray-600">
                   Hiển thị {startIndex + 1} -{" "}
-                  {Math.min(startIndex + itemsPerPage, data.length)} /{" "}
-                  {data.length} records
+                  {Math.min(startIndex + itemsPerPage, total)} / {total} records
                 </div>
 
                 <div className="flex items-center gap-1">
